@@ -1,0 +1,36 @@
+name: Auto Publish Article
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # every Monday at 09:00 UTC
+  workflow_dispatch:      # manual trigger for testing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # needed to commit state.json back
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Generate and publish article
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+        run: python run.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name "autopilot[bot]"
+          git config user.email "autopilot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || git commit -m "chore: mark topic published [skip ci]"
+          git push
