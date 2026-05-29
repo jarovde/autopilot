@@ -1,5 +1,6 @@
 {
   "published": [
-    "How to build a production-ready Claude chatbot in Python"
+    "How to build a production-ready Claude chatbot in Python",
+    "Prompt caching with Claude API: save 90% on repeated calls"
   ]
 }
