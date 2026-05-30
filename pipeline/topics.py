@@ -23,10 +23,32 @@ TOPICS = [
     "How to write Python that runs 10x faster with these tricks",
     # Side income / indie dev
     "How I automated my side project to earn while I sleep",
-    "The developer's guide to passive income with APIs",
-    "Building micro-SaaS: lessons from 0 to first €1000",
-    "Selling code on Gumroad: what works and what doesn't",
+    "The developer\'s guide to passive income with APIs",
+    "Building micro-SaaS: lessons from 0 to first \u20ac1000",
+    "Selling code on Gumroad: what works and what doesn\'t",
     "How to monetize a technical blog in 2026",
+    # Claude Code / Jarvis
+    "Claude Code as a personal Jarvis: the complete setup guide",
+    "MCP servers explained: give your AI hands in 10 minutes",
+    "How to build a 24/7 AI assistant that runs on your machine",
+    "Slash commands in Claude Code: build your own workflow shortcuts",
+    "Automating your morning brief with Claude Code and Gmail MCP",
+    "How to connect Claude to Telegram in 30 lines of Python",
+    "Claude Code hooks: automate actions on every AI response",
+    "Building a personal knowledge base with Claude and vector memory",
+    # Automation / no-code
+    "GitHub Actions + Claude API: automate your content pipeline",
+    "How to post to Dev.to automatically with Python and the API",
+    "5 boring tasks you can automate with Claude this weekend",
+    "n8n + Claude: building AI workflows without writing code",
+    "Auto-triage your inbox with Claude and Gmail API",
+    # Career / productivity
+    "How developers are using AI to work 2x faster in 2026",
+    "The AI-augmented developer: tools worth paying for",
+    "Stop copy-pasting from ChatGPT: build your own AI CLI",
+    "10 Claude prompts every developer should have saved",
+    "From side project to \u20ac500/month: the honest timeline",
+    "How to learn any codebase in 30 minutes with Claude",
 ]
 
 AFFILIATE_LINKS = {
