@@ -22,10 +22,17 @@ jobs:
         run: pip install requests
 
       - name: Generate and publish article
+        id: publish
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
-        run: python run.py
+        run: |
+          OUTPUT=$(python run.py)
+          echo "$OUTPUT"
+          TITLE=$(echo "$OUTPUT" | grep "^Title:" | sed 's/^Title: //')
+          URL=$(echo "$OUTPUT" | grep "^Published:" | sed 's/^Published: //')
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Commit updated state
         run: |
@@ -34,3 +41,20 @@ jobs:
           git add state.json
           git diff --cached --quiet || git commit -m "chore: mark topic published [skip ci]"
           git push
+
+      - name: Notify Telegram
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          TITLE="${{ steps.publish.outputs.title }}"
+          URL="${{ steps.publish.outputs.url }}"
+          MESSAGE="Autopilot published new article on dev.to/syncore
+
+Title: ${TITLE:-unknown}
+URL: ${URL:-https://dev.to/syncore}
+
+Next run: next Monday 09:00"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="${TG_CHAT_ID}" \
+            --data-urlencode text="$MESSAGE"
