@@ -51,6 +51,10 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
     body_start = text.index("BODY:") + len("BODY:")
     body = text[body_start:].strip()
     body = _inject_affiliate_links(body, affiliate_links)
+    word_count = len(body.split())
+    read_time = max(1, round(word_count / 200))
+    read_banner = f"> {read_time} min read · {word_count} words\n\n"
+    body = read_banner + body
     return {"title": title, "tags": tags, "body": body}
 
 
