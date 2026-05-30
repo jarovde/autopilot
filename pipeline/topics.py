@@ -52,8 +52,10 @@ TOPICS = [
 ]
 
 AFFILIATE_LINKS = {
-    "anthropic": "https://console.anthropic.com",           # replace with your affiliate link
-    "digitalocean": "https://m.do.co/c/YOURREF",           # $200 credit affiliate
-    "gumroad": "https://gumroad.com",
-    "python": "https://www.python.org",
+    "anthropic": "https://console.anthropic.com/",
+    "digitalocean": "https://www.digitalocean.com/",
+    "gumroad": "https://gumroad.com/",
+    "python": "https://www.python.org/",
+    "devto": "https://dev.to/syncore",
+    "github": "https://github.com/jarovde",
 }
