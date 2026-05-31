@@ -6,18 +6,28 @@ import os
 import requests
 
 DEVTO_API = "https://dev.to/api/articles"
+SERIES_NAME = "Building with Claude API"
 
 
 def publish(title: str, body: str, tags: list[str], published: bool = True) -> dict:
     api_key = os.environ["DEVTO_API_KEY"]
+
+    # Only add to series for Claude/AI/Python topics
+    ai_keywords = ["claude", "ai", "llm", "api", "python", "agent", "prompt", "gpt"]
+    in_series = any(kw in title.lower() for kw in ai_keywords)
+
     payload = {
         "article": {
             "title": title,
             "body_markdown": body,
             "published": published,
-            "tags": tags[:4],  # Dev.to max 4 tags
+            "tags": tags[:4],
+            "description": title,
         }
     }
+    if in_series:
+        payload["article"]["series"] = SERIES_NAME
+
     response = requests.post(
         DEVTO_API,
         json=payload,
@@ -26,6 +36,8 @@ def publish(title: str, body: str, tags: list[str], published: bool = True) -> d
     )
     response.raise_for_status()
     data = response.json()
+    print(f"Title: {data['title']}")
+    print(f"Published: {data['url']}")
     return {
         "id": data["id"],
         "url": data["url"],
