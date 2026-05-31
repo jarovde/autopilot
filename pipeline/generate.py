@@ -29,6 +29,22 @@ BODY:
 full markdown article body here"""
 
 
+
+def _optimize_tags(topic: str, generated_tags: list) -> list:
+    """Override generated tags with high-reach Dev.to tags based on topic."""
+    t = topic.lower()
+    if any(k in t for k in ["claude", "anthropic", "llm", "agent", "prompt", "mcp"]):
+        return ["ai", "claude", "python", "tutorial"]
+    if any(k in t for k in ["api", "chatbot", "openai", "gpt"]):
+        return ["ai", "python", "api", "tutorial"]
+    if any(k in t for k in ["fastapi", "flask", "django", "async", "python"]):
+        return ["python", "webdev", "programming", "tutorial"]
+    if any(k in t for k in ["passive", "income", "saas", "gumroad", "monetize"]):
+        return ["career", "productivity", "programming", "ai"]
+    if any(k in t for k in ["github", "automation", "pipeline", "cron"]):
+        return ["devops", "automation", "python", "ai"]
+    return generated_tags[:4]
+
 def generate_article(topic: str, affiliate_links: dict) -> dict:
     api_key = os.environ["GEMINI_API_KEY"]
     payload = json.dumps({
@@ -48,6 +64,7 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
     title = next(l.removeprefix("TITLE:").strip() for l in lines if l.startswith("TITLE:"))
     tags_raw = next(l.removeprefix("TAGS:").strip() for l in lines if l.startswith("TAGS:"))
     tags = [t.strip() for t in tags_raw.split(",")][:4]
+    tags = _optimize_tags(topic, tags)
     body_start = text.index("BODY:") + len("BODY:")
     body = text[body_start:].strip()
     body = _inject_affiliate_links(body, affiliate_links)
