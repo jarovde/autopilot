@@ -22,6 +22,7 @@ jobs:
         run: pip install requests
 
       - name: Generate and publish article
+        id: publish
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
@@ -35,17 +36,36 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: mark topic published [skip ci]"
           git push
 
+      # Alles onder `run: |` MOET dieper inspringen dan de `run:` sleutel.
+      # Stond dit script op kolom 0, dan stopt het block-scalar daar en leest
+      # YAML `import urllib.request...` als een top-level key → parse error.
+      # Dat is precies wat hier 8 weken lang misging: een onparseerbare
+      # workflow registreert zijn `schedule` niet, dus de maandag-cron bestond
+      # simpelweg niet. Laat de inspringing staan.
       - name: Notify Telegram
+        if: always()
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          ARTICLE_URL: ${{ steps.publish.outputs.url }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          python3 -c "
-import urllib.request, urllib.parse, os, json
-token = os.environ['TG_TOKEN']
-chat_id = os.environ['TG_CHAT_ID']
-msg = 'Autopilot: new article published on dev.to/syncore'
-data = urllib.parse.urlencode({'chat_id': chat_id, 'text': msg}).encode()
-urllib.request.urlopen(f'https://api.telegram.org/bot{token}/sendMessage', data)
-print('Telegram notified')
-"
+          python3 - <<'PY'
+          import os, urllib.request, urllib.parse
+          token = os.environ.get("TG_TOKEN")
+          chat_id = os.environ.get("TG_CHAT_ID")
+          if not token or not chat_id:
+              print("no telegram secrets — skipped")
+              raise SystemExit(0)
+          if os.environ["JOB_STATUS"] == "success":
+              url = os.environ.get("ARTICLE_URL") or "dev.to/syncore"
+              msg = f"Autopilot: nieuw artikel live\n{url}"
+          else:
+              # Stilte was het echte probleem — een mislukte run meldt zichzelf.
+              msg = f"Autopilot FAALDE ({os.environ['JOB_STATUS']})\n{os.environ['RUN_URL']}"
+          data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode()
+          urllib.request.urlopen(
+              f"https://api.telegram.org/bot{token}/sendMessage", data, timeout=20)
+          print("Telegram notified")
+          PY

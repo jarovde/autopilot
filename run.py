@@ -2,6 +2,7 @@
 Main entrypoint — called by GitHub Actions every week.
 Picks next unpublished topic, generates article, publishes, updates state.
 """
+import os
 import sys
 from pipeline.topics import TOPICS, AFFILIATE_LINKS
 from pipeline.state import next_topic, mark_published
@@ -28,6 +29,13 @@ def main():
     )
     mark_published(topic)
     print(f"Published: {result['url']}")
+
+    # Geef de echte URL door aan de workflow, zodat de Telegram-melding het
+    # artikel linkt in plaats van een generieke regel.
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a") as f:
+            f.write(f"url={result['url']}\n")
 
 
 if __name__ == "__main__":

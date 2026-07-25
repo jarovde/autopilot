@@ -3,19 +3,10 @@ Publish an article to Dev.to via their API.
 Docs: https://developers.forem.com/api/v1#tag/articles/operation/createArticle
 """
 import os
-import re
 import requests
 
 DEVTO_API = "https://dev.to/api/articles"
 SERIES_NAME = "Building with Claude API"
-DEVTO_USERNAME = "syncore"
-
-
-def _slugify(title: str) -> str:
-    slug = title.lower()
-    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
-    slug = re.sub(r"\s+", "-", slug.strip())
-    return slug[:80]
 
 
 def publish(title: str, body: str, tags: list[str], published: bool = True) -> dict:
@@ -24,9 +15,12 @@ def publish(title: str, body: str, tags: list[str], published: bool = True) -> d
     ai_keywords = ["claude", "ai", "llm", "api", "python", "agent", "prompt", "gpt"]
     in_series = any(kw in title.lower() for kw in ai_keywords)
 
-    slug = _slugify(title)
-    canonical_url = f"https://dev.to/{DEVTO_USERNAME}/{slug}"
-
+    # GEEN canonical_url. Die stond hier als f"https://dev.to/{user}/{slug}",
+    # maar Dev.to hangt zelf een random suffix aan de slug (…-4e23), dus die
+    # URL bestaat niet. Een canonical naar een 404 vertelt Google dat DIT niet
+    # de echte pagina is — precies het tegenovergestelde van de SEO waar deze
+    # pipeline voor bestaat. canonical_url hoort alleen bij cross-posten vanaf
+    # je eigen blog; een native Dev.to-artikel canonicaliseert zichzelf.
     payload = {
         "article": {
             "title": title,
@@ -34,7 +28,6 @@ def publish(title: str, body: str, tags: list[str], published: bool = True) -> d
             "published": published,
             "tags": tags[:4],
             "description": title,
-            "canonical_url": canonical_url,
         }
     }
     if in_series:
