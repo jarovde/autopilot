@@ -2,6 +2,7 @@
   "published": [
     "How to build a production-ready Claude chatbot in Python",
     "Prompt caching with Claude API: save 90% on repeated calls",
-    "Claude tool use: build an autonomous agent in 50 lines"
+    "Claude tool use: build an autonomous agent in 50 lines",
+    "Batch API deep dive: process 1000 prompts at half the cost"
   ]
 }
