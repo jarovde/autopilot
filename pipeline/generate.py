@@ -7,11 +7,15 @@ import json
 import re
 import urllib.request
 
+from pipeline.model_facts import MODEL_FACTS, repair, assert_current
+
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 
 PROMPT = """You are an expert technical writer for developers. Write engaging,
 practical articles that rank on Google and get read on Dev.to.
 Always include working code examples. Be direct and useful — no fluff.
+
+{model_facts}
 
 Write a complete Dev.to article about: {topic}
 
@@ -48,7 +52,9 @@ def _optimize_tags(topic: str, generated_tags: list) -> list:
 def generate_article(topic: str, affiliate_links: dict) -> dict:
     api_key = os.environ["GEMINI_API_KEY"]
     payload = json.dumps({
-        "contents": [{"parts": [{"text": PROMPT.format(topic=topic)}]}],
+        "contents": [
+            {"parts": [{"text": PROMPT.format(topic=topic, model_facts=MODEL_FACTS)}]}
+        ],
         "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.7},
     }).encode()
     req = urllib.request.Request(
@@ -67,6 +73,16 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
     tags = _optimize_tags(topic, tags)
     body_start = text.index("BODY:") + len("BODY:")
     body = text[body_start:].strip()
+
+    # Vangnet achter de prompt-feiten. De prompt houdt Gemini meestal bij de
+    # les, maar niet altijd — het artikel van 10 aug ging mis in de TITEL, dus
+    # die gaat hier net zo goed doorheen als de body.
+    title, title_fixes = repair(title)
+    body, body_fixes = repair(body)
+    for fix in title_fixes + body_fixes:
+        print(f"Verouderde modelnaam gerepareerd: {fix}")
+    assert_current(body)
+
     body = _inject_affiliate_links(body, affiliate_links)
     word_count = len(body.split())
     read_time = max(1, round(word_count / 200))

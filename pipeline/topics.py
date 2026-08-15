@@ -12,7 +12,7 @@ TOPICS = [
     "Streaming responses with Claude: a complete guide",
     "How to fine-tune your prompts for Claude Sonnet vs Opus",
     "Building a RAG system with Claude and local embeddings",
-    "Claude vs GPT-4: which API is better for developers in 2026",
+    "Claude Opus 5 vs Sonnet 5 vs Haiku 4.5: which model should you actually use?",
     "How to add memory to your Claude chatbot",
     "Multi-agent workflows with Claude: patterns and pitfalls",
     # Python / dev tools
