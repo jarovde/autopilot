@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 9 * * 1"  # every Monday at 09:00 UTC
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Alleen genereren en tonen, niets publiceren"
+        type: boolean
+        default: false
 
 jobs:
   publish:
@@ -26,9 +31,11 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
-        run: python run.py
+        run: python run.py ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Commit updated state
+        # Een dry run vinkt geen topic af, dus er valt ook niets vast te leggen.
+        if: ${{ !inputs.dry_run }}
         run: |
           git config user.name "autopilot[bot]"
           git config user.email "autopilot@users.noreply.github.com"
@@ -49,6 +56,7 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           ARTICLE_URL: ${{ steps.publish.outputs.url }}
           JOB_STATUS: ${{ job.status }}
+          DRY_RUN: ${{ inputs.dry_run }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 - <<'PY'
@@ -58,7 +66,11 @@ jobs:
           if not token or not chat_id:
               print("no telegram secrets — skipped")
               raise SystemExit(0)
-          if os.environ["JOB_STATUS"] == "success":
+          if os.environ["JOB_STATUS"] == "success" and os.environ.get("DRY_RUN") == "true":
+              # Een dry run publiceert niets; melden dat er een artikel live is
+              # zou een leugen zijn met dezelfde vorm als de echte melding.
+              msg = f"Autopilot dry run geslaagd — niets gepubliceerd\n{os.environ['RUN_URL']}"
+          elif os.environ["JOB_STATUS"] == "success":
               url = os.environ.get("ARTICLE_URL") or "dev.to/syncore"
               msg = f"Autopilot: nieuw artikel live\n{url}"
           else:

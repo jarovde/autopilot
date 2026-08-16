@@ -11,6 +11,13 @@ from pipeline.publish import publish
 
 
 def main():
+    # --dry-run schrijft het artikel naar stdout en publiceert niets. Bedoeld
+    # om via workflow_dispatch te draaien: dat is de enige plek waar de
+    # GEMINI_API_KEY bestaat, dus zonder deze vlag is de pijplijn alleen te
+    # testen door echt te publiceren. Het topic wordt dan ook NIET afgevinkt,
+    # zodat de maandagrun hem gewoon nog oppakt.
+    dry_run = "--dry-run" in sys.argv
+
     topic = next_topic(TOPICS)
     if topic is None:
         print("All topics published. Add more to pipeline/topics.py")
@@ -20,6 +27,11 @@ def main():
     article = generate_article(topic, AFFILIATE_LINKS)
     print(f"Title: {article['title']}")
     print(f"Tags: {article['tags']}")
+
+    if dry_run:
+        print("\n--- DRY RUN — niets gepubliceerd, topic niet afgevinkt ---\n")
+        print(article["body"])
+        return
 
     result = publish(
         title=article["title"],

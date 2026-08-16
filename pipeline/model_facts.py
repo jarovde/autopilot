@@ -106,13 +106,31 @@ def repair(text: str) -> tuple[str, list[str]]:
     return text, fixed
 
 
+_FENCE_RE = re.compile(r"```[^\n]*\n(.*?)```", re.S)
+_CLAUDE_RE = re.compile(r"anthropic|claude", re.I)
+
+
+def claude_code_blocks(text: str) -> list[str]:
+    """De codeblokken die daadwerkelijk Claude aanroepen.
+
+    De FATAL-controle mag alleen hierop kijken. De topic-bank bevat artikelen
+    die niets met Claude te maken hebben ("10 Python one-liners", "asyncio
+    explained simply"), en een RAG-artikel zet gerust een OpenAI- of
+    sentence-transformers-voorbeeld ernaast. `temperature=0.2` is daar volkomen
+    correct. Zou de controle de hele body scannen, dan brak zo'n artikel de run
+    af en verscheen er die week niets — een storing die het middel veroorzaakt,
+    niet de kwaal.
+    """
+    return [b for b in _FENCE_RE.findall(text) if _CLAUDE_RE.search(b)]
+
+
 def assert_current(text: str) -> None:
-    """Stop de run als er onrepareerbaar verouderde API-vormen in de tekst staan."""
-    problems = [
-        f"{reason} (patroon: {pattern})"
-        for pattern, reason in FATAL
-        if re.search(pattern, text)
-    ]
+    """Stop de run als een Claude-codeblok een API-vorm gebruikt die 400 geeft."""
+    problems = []
+    for block in claude_code_blocks(text):
+        for pattern, reason in FATAL:
+            if re.search(pattern, block) and reason not in problems:
+                problems.append(reason)
     if problems:
         raise ValueError(
             "Artikel bevat verouderde Claude API-code en is NIET gepubliceerd:\n  - "
