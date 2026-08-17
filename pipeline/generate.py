@@ -50,6 +50,44 @@ def _optimize_tags(topic: str, generated_tags: list) -> list:
         return ["devops", "automation", "python", "ai"]
     return generated_tags[:4]
 
+# ── Antwoord uitlezen ─────────────────────────────────────────────────────────
+# Het model krijgt een strikt formaat opgelegd, maar houdt zich daar niet altijd
+# exact aan: het zet er weleens een zin voor, maakt er "**TITLE:**" van, of pakt
+# het geheel in een ```-blok. Dat gaf eerder een kale StopIteration of
+# ValueError, en dan faalt de hele run om opmaak in plaats van om inhoud. Deze
+# lezers zijn daar tolerant in; alleen als een veld écht ontbreekt volgt een
+# fout, mét het begin van wat het model dan wel schreef.
+
+_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n(.*?)\n\s*```\s*$", re.S)
+
+
+def _ontdoe_van_fence(text: str) -> str:
+    m = _FENCE.match(text)
+    return m.group(1).strip() if m else text
+
+
+def _veld(text: str, naam: str) -> str:
+    """Waarde van TITLE:/TAGS:, ongeacht opmaak of inspringing."""
+    patroon = re.compile(rf"^[\s>*_#-]*\**\s*{naam}\s*\**\s*:\s*(.+?)\s*$",
+                         re.I | re.M)
+    m = patroon.search(text)
+    if not m:
+        raise GeneratieFout(f"geen {naam}:-regel in het antwoord. "
+                            f"Begin: {text[:300]!r}")
+    # Overgebleven markdown-nadruk rond de waarde weghalen.
+    return m.group(1).strip().strip("*_").strip()
+
+
+def _lichaam(text: str) -> str:
+    m = re.search(r"^[\s>*_#-]*\**\s*BODY\s*\**\s*:\s*", text, re.I | re.M)
+    if not m:
+        raise GeneratieFout(f"geen BODY:-blok in het antwoord. Begin: {text[:300]!r}")
+    body = text[m.end():].strip()
+    if not body:
+        raise GeneratieFout("BODY: was leeg")
+    return body
+
+
 class GeneratieFout(Exception):
     """Fout met genoeg context om hem van buitenaf te kunnen duiden.
 
@@ -111,21 +149,12 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
     # daarvan af, dan gaf dit eerder een kale StopIteration of ValueError
     # zonder enige aanwijzing. Nu staat het begin van het antwoord in de fout,
     # zodat te zien is wát het model dan wel schreef.
-    lines = text.split("\n")
-    try:
-        title = next(l.removeprefix("TITLE:").strip() for l in lines if l.startswith("TITLE:"))
-    except StopIteration:
-        raise GeneratieFout(f"geen TITLE:-regel in het antwoord. Begin: {text[:300]!r}") from None
-    try:
-        tags_raw = next(l.removeprefix("TAGS:").strip() for l in lines if l.startswith("TAGS:"))
-    except StopIteration:
-        raise GeneratieFout(f"geen TAGS:-regel in het antwoord. Begin: {text[:300]!r}") from None
-    tags = [t.strip() for t in tags_raw.split(",")][:4]
+    text = _ontdoe_van_fence(text)
+    title    = _veld(text, "TITLE")
+    tags_raw = _veld(text, "TAGS")
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()][:4]
     tags = _optimize_tags(topic, tags)
-    if "BODY:" not in text:
-        raise GeneratieFout(f"geen BODY:-blok in het antwoord. Begin: {text[:300]!r}")
-    body_start = text.index("BODY:") + len("BODY:")
-    body = text[body_start:].strip()
+    body = _lichaam(text)
     if not body:
         raise GeneratieFout("BODY: was leeg")
 
