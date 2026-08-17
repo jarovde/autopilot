@@ -12,7 +12,20 @@ import urllib.request
 
 from pipeline.model_facts import MODEL_FACTS, repair, assert_current
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+GEMINI_BASIS = "https://generativelanguage.googleapis.com/v1beta/models"
+
+# Meerdere modellen, in volgorde van voorkeur. Op 17 aug lag
+# gemini-flash-latest er urenlang uit met 503 "high demand" — herkansen hielp
+# niet, want het was geen piek van een minuut. De pijplijn hing aan één model
+# en dus viel de weekrun weg. De namen hieronder zijn opgevraagd bij de API
+# (models-endpoint), niet verzonnen. De lite-variant staat er expres achteraan:
+# die heeft doorgaans capaciteit over als de gewone vollopen.
+MODELLEN = [
+    "gemini-flash-latest",
+    "gemini-3.7-flash",
+    "gemini-2.5-flash",
+    "gemini-flash-lite-latest",
+]
 
 PROMPT = """You are an expert technical writer for developers. Write engaging,
 practical articles that rank on Google and get read on Dev.to.
@@ -111,16 +124,27 @@ POGINGEN  = 4
 WACHT     = [5, 15, 45]      # seconden tussen de pogingen
 
 
-def _vraag_gemini(req) -> bytes:
+def _probeer_model(model: str, payload: bytes, api_key: str) -> tuple[bytes, str]:
+    """Eén model, met herkansingen. Geeft (antwoord, "") of (b"", reden)."""
+    req = urllib.request.Request(
+        f"{GEMINI_BASIS}/{model}:generateContent",
+        data=payload,
+        headers={"Content-Type": "application/json", "X-goog-api-key": api_key},
+        method="POST",
+    )
     laatste = ""
     for poging in range(POGINGEN):
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
-                return resp.read()
+                return resp.read(), ""
         except urllib.error.HTTPError as e:
-            lijf = e.read().decode("utf-8", "replace")[:400]
+            lijf = e.read().decode("utf-8", "replace")[:300]
             laatste = f"HTTP {e.code}: {lijf}"
+            if e.code == 404:
+                return b"", f"model bestaat niet ({model})"
             if e.code not in TIJDELIJK:
+                # 400/403 gaat over het verzoek of de sleutel: een ander model
+                # lost dat niet op, dus meteen stoppen.
                 raise GeneratieFout(f"Gemini gaf {laatste}") from None
         except (TimeoutError, socket.timeout) as e:
             laatste = f"timeout: {e}"
@@ -132,12 +156,23 @@ def _vraag_gemini(req) -> bytes:
 
         if poging < POGINGEN - 1:
             pauze = WACHT[poging]
-            print(f"Gemini tijdelijk niet beschikbaar ({laatste[:80]}) — "
+            print(f"{model} niet beschikbaar ({laatste[:70]}) — "
                   f"poging {poging + 2}/{POGINGEN} over {pauze}s", flush=True)
             time.sleep(pauze)
+    return b"", laatste
 
-    raise GeneratieFout(
-        f"Gemini bleef onbereikbaar na {POGINGEN} pogingen — {laatste}")
+
+def _vraag_gemini(payload: bytes, api_key: str) -> bytes:
+    redenen = []
+    for model in MODELLEN:
+        antwoord, reden = _probeer_model(model, payload, api_key)
+        if antwoord:
+            if redenen:
+                print(f"Uitgeweken naar {model}", flush=True)
+            return antwoord
+        redenen.append(f"{model}: {reden[:120]}")
+        print(f"{model} opgegeven — volgende model proberen", flush=True)
+    raise GeneratieFout("geen enkel Gemini-model beschikbaar — " + " | ".join(redenen))
 
 
 def generate_article(topic: str, affiliate_links: dict) -> dict:
@@ -152,13 +187,7 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
         ],
         "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.7},
     }).encode()
-    req = urllib.request.Request(
-        GEMINI_URL,
-        data=payload,
-        headers={"Content-Type": "application/json", "X-goog-api-key": api_key},
-        method="POST",
-    )
-    rauw = _vraag_gemini(req)
+    rauw = _vraag_gemini(payload, api_key)
 
     try:
         data = json.loads(rauw)
