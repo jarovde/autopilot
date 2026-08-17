@@ -50,5 +50,25 @@ def main():
             f.write(f"url={result['url']}\n")
 
 
+def _meld_reden(reden: str):
+    """Zet de reden in GITHUB_OUTPUT zodat de Telegram-melding hem meeneemt.
+
+    Zonder dit zegt een mislukte run alleen "Autopilot FAALDE" met een link, en
+    zijn de Actions-logs afgeschermd voor wie niet ingelogd is. Dan sta je te
+    gissen — precies wat er op 17 aug gebeurde bij run #12.
+    """
+    print(f"FOUT: {reden}", flush=True)
+    uit = os.environ.get("GITHUB_OUTPUT")
+    if uit:
+        # Eén regel; nieuwe regels zouden het key=value-formaat breken.
+        plat = " ".join(str(reden).split())[:400]
+        with open(uit, "a") as f:
+            f.write(f"reden={plat}\n")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        _meld_reden(f"{type(e).__name__}: {e}")
+        sys.exit(1)

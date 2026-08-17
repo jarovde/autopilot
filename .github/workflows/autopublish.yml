@@ -56,6 +56,7 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           ARTICLE_URL: ${{ steps.publish.outputs.url }}
           JOB_STATUS: ${{ job.status }}
+          REDEN: ${{ steps.publish.outputs.reden }}
           DRY_RUN: ${{ inputs.dry_run }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -75,7 +76,11 @@ jobs:
               msg = f"Autopilot: nieuw artikel live\n{url}"
           else:
               # Stilte was het echte probleem — een mislukte run meldt zichzelf.
-              msg = f"Autopilot FAALDE ({os.environ['JOB_STATUS']})\n{os.environ['RUN_URL']}"
+              # De reden erbij: de Actions-logs zijn afgeschermd, dus zonder
+              # dit is "FAALDE" alles wat je hebt en sta je te gissen.
+              reden = os.environ.get("REDEN") or "geen reden doorgegeven"
+              msg = (f"Autopilot FAALDE ({os.environ['JOB_STATUS']})\n"
+                     f"{reden}\n{os.environ['RUN_URL']}")
           data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode()
           urllib.request.urlopen(
               f"https://api.telegram.org/bot{token}/sendMessage", data, timeout=20)

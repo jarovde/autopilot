@@ -5,6 +5,7 @@ Returns: {"title": str, "body": str, "tags": list[str]}
 import os
 import json
 import re
+import urllib.error
 import urllib.request
 
 from pipeline.model_facts import MODEL_FACTS, repair, assert_current
@@ -49,8 +50,23 @@ def _optimize_tags(topic: str, generated_tags: list) -> list:
         return ["devops", "automation", "python", "ai"]
     return generated_tags[:4]
 
+class GeneratieFout(Exception):
+    """Fout met genoeg context om hem van buitenaf te kunnen duiden.
+
+    Bestaat omdat run #12 (17 aug) faalde met alleen "Process completed with
+    exit code 1" in de annotatie en afgeschermde logs. Daarmee viel van buitenaf
+    niet vast te stellen wat er misging — precies het patroon dat we hier al
+    vaker hadden: een mislukking die niets zegt. Elke stap hieronder faalt nu
+    met een eigen, benoemde reden.
+    """
+
+
 def generate_article(topic: str, affiliate_links: dict) -> dict:
-    api_key = os.environ["GEMINI_API_KEY"]
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise GeneratieFout("GEMINI_API_KEY ontbreekt in de omgeving "
+                            "(secret verwijderd of hernoemd?)")
+
     payload = json.dumps({
         "contents": [
             {"parts": [{"text": PROMPT.format(topic=topic, model_facts=MODEL_FACTS)}]}
@@ -63,16 +79,55 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
         headers={"Content-Type": "application/json", "X-goog-api-key": api_key},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read())
-    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            rauw = resp.read()
+    except urllib.error.HTTPError as e:
+        lijf = e.read().decode("utf-8", "replace")[:400]
+        raise GeneratieFout(f"Gemini gaf HTTP {e.code}: {lijf}") from None
+    except Exception as e:
+        raise GeneratieFout(f"Gemini niet bereikbaar: {type(e).__name__}: {e}") from None
+
+    try:
+        data = json.loads(rauw)
+    except Exception:
+        raise GeneratieFout(f"Gemini gaf geen JSON: {rauw[:300]!r}") from None
+
+    kandidaten = data.get("candidates") or []
+    if not kandidaten:
+        # Bij een blokkade zit de reden in promptFeedback, niet in candidates.
+        raise GeneratieFout(f"Gemini gaf geen kandidaten — "
+                            f"promptFeedback={data.get('promptFeedback')}")
+    kandidaat = kandidaten[0]
+    delen = (kandidaat.get("content") or {}).get("parts") or []
+    if not delen:
+        raise GeneratieFout(f"Gemini gaf een lege kandidaat — "
+                            f"finishReason={kandidaat.get('finishReason')}")
+    text = delen[0].get("text", "").strip()
+    if not text:
+        raise GeneratieFout("Gemini gaf lege tekst terug")
+
+    # De parse hieronder eist het TITLE/TAGS/BODY-formaat. Wijkt het model
+    # daarvan af, dan gaf dit eerder een kale StopIteration of ValueError
+    # zonder enige aanwijzing. Nu staat het begin van het antwoord in de fout,
+    # zodat te zien is wát het model dan wel schreef.
     lines = text.split("\n")
-    title = next(l.removeprefix("TITLE:").strip() for l in lines if l.startswith("TITLE:"))
-    tags_raw = next(l.removeprefix("TAGS:").strip() for l in lines if l.startswith("TAGS:"))
+    try:
+        title = next(l.removeprefix("TITLE:").strip() for l in lines if l.startswith("TITLE:"))
+    except StopIteration:
+        raise GeneratieFout(f"geen TITLE:-regel in het antwoord. Begin: {text[:300]!r}") from None
+    try:
+        tags_raw = next(l.removeprefix("TAGS:").strip() for l in lines if l.startswith("TAGS:"))
+    except StopIteration:
+        raise GeneratieFout(f"geen TAGS:-regel in het antwoord. Begin: {text[:300]!r}") from None
     tags = [t.strip() for t in tags_raw.split(",")][:4]
     tags = _optimize_tags(topic, tags)
+    if "BODY:" not in text:
+        raise GeneratieFout(f"geen BODY:-blok in het antwoord. Begin: {text[:300]!r}")
     body_start = text.index("BODY:") + len("BODY:")
     body = text[body_start:].strip()
+    if not body:
+        raise GeneratieFout("BODY: was leeg")
 
     # Vangnet achter de prompt-feiten. De prompt houdt Gemini meestal bij de
     # les, maar niet altijd — het artikel van 10 aug ging mis in de TITEL, dus
