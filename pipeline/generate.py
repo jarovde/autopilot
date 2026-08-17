@@ -5,6 +5,8 @@ Returns: {"title": str, "body": str, "tags": list[str]}
 import os
 import json
 import re
+import socket
+import time
 import urllib.error
 import urllib.request
 
@@ -99,6 +101,45 @@ class GeneratieFout(Exception):
     """
 
 
+# Codes die betekenen "probeer het straks nog eens", niet "je verzoek deugt
+# niet". 503 velde run #12 op 17 aug: Gemini meldde "This model is currently
+# experiencing high demand", en omdat er geen herkansing was viel de hele
+# weekrun weg. Een 400 of 403 hoort juist NIET herhaald te worden — dan is er
+# iets mis met het verzoek of de sleutel en helpt wachten niet.
+TIJDELIJK = {429, 500, 502, 503, 504}
+POGINGEN  = 4
+WACHT     = [5, 15, 45]      # seconden tussen de pogingen
+
+
+def _vraag_gemini(req) -> bytes:
+    laatste = ""
+    for poging in range(POGINGEN):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as e:
+            lijf = e.read().decode("utf-8", "replace")[:400]
+            laatste = f"HTTP {e.code}: {lijf}"
+            if e.code not in TIJDELIJK:
+                raise GeneratieFout(f"Gemini gaf {laatste}") from None
+        except (TimeoutError, socket.timeout) as e:
+            laatste = f"timeout: {e}"
+        except urllib.error.URLError as e:
+            laatste = f"netwerkfout: {e.reason}"
+        except Exception as e:
+            raise GeneratieFout(
+                f"Gemini niet bereikbaar: {type(e).__name__}: {e}") from None
+
+        if poging < POGINGEN - 1:
+            pauze = WACHT[poging]
+            print(f"Gemini tijdelijk niet beschikbaar ({laatste[:80]}) — "
+                  f"poging {poging + 2}/{POGINGEN} over {pauze}s", flush=True)
+            time.sleep(pauze)
+
+    raise GeneratieFout(
+        f"Gemini bleef onbereikbaar na {POGINGEN} pogingen — {laatste}")
+
+
 def generate_article(topic: str, affiliate_links: dict) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -117,14 +158,7 @@ def generate_article(topic: str, affiliate_links: dict) -> dict:
         headers={"Content-Type": "application/json", "X-goog-api-key": api_key},
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            rauw = resp.read()
-    except urllib.error.HTTPError as e:
-        lijf = e.read().decode("utf-8", "replace")[:400]
-        raise GeneratieFout(f"Gemini gaf HTTP {e.code}: {lijf}") from None
-    except Exception as e:
-        raise GeneratieFout(f"Gemini niet bereikbaar: {type(e).__name__}: {e}") from None
+    rauw = _vraag_gemini(req)
 
     try:
         data = json.loads(rauw)
