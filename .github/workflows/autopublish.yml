@@ -26,6 +26,13 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      # De uitwijk-keten draait alleen als Gemini stuk is — precies wanneer
+      # niemand meekijkt. Deze test stubt de HTTP-laag en heeft dus geen
+      # sleutel of netwerk nodig; hij faalt hier in seconden in plaats van
+      # maandagochtend, en kost een weekrun als hij toch iets vindt.
+      - name: Test uitwijk-keten
+        run: python3 test_fallback.py
+
       - name: Generate and publish article
         id: publish
         env:
