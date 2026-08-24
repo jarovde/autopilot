@@ -5,6 +5,7 @@
     "Claude tool use: build an autonomous agent in 50 lines",
     "Batch API deep dive: process 1000 prompts at half the cost",
     "Streaming responses with Claude: a complete guide",
-    "How to fine-tune your prompts for Claude Sonnet vs Opus"
+    "How to fine-tune your prompts for Claude Sonnet vs Opus",
+    "Building a RAG system with Claude and local embeddings"
   ]
 }
